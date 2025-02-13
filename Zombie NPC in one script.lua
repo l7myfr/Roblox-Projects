@@ -1,12 +1,8 @@
-local NPCS = {}
-local Seperation = {}
-local NPCSight = {}
-local Nearest = {}
-local PathFind = {}
-local Attack = {}
+local Seperation, Attack, NPCSight, Nearest,PathFind, NPCS = {},  {},  {},  {},  {},  {}
+local SEPARATION_DISTANCE, SEPARATION_FORCE = 5, 10
 
-
---[[ FUNCTION EXPLANATIONS!
+-- could not get this script under 269 lines (not including comments) sorry D:
+--[[ FUNCTION EXPLANATIONS! 
 
 getSeparationForce(NPCINSTANCE) -- This function helps NPCs avoid overlapping with each other. 
 -- Without this, they might end up stacked on top of one another or moving too robotically.
@@ -45,15 +41,11 @@ visualizeRay(startPos, endPos) -- Creates a temporary red line in the game world
 -- Useful for debugging NPC vision or pathfinding.
 
 --]]
-local SEPARATION_DISTANCE = 5
-local SEPARATION_FORCE = 10
 function Seperation.getSeparationForce(npc) 
 	local root = npc.PrimaryPart
 	if not root then return Vector3.zero end
-
 	local force = Vector3.zero
 	local count = 0
-
 	for _, other in ipairs(_G.NPCs) do
 		if other.NPC ~= npc and other.NPC.PrimaryPart then
 			local distance = (root.Position - other.NPC.PrimaryPart.Position).Magnitude
@@ -64,54 +56,21 @@ function Seperation.getSeparationForce(npc)
 			end
 		end
 	end
-
 	if count > 0 then
 		force = (force / count) * SEPARATION_FORCE
 	end
-
 	return force
 end
-function PathFind.PathFind(NPC, Target, v, retryAttempts)
-	if not NPC then return end
-	if not NPC.PrimaryPart then return end
-	if not Target then return end
-	if not Target.PrimaryPart then return end
-
-	retryAttempts = retryAttempts or 0
-	local path = game.PathfindingService:CreatePath({
-		AgentRadius = 3,
-		AgentHeight = 6,
-		AgentCanJump = true,
-		AgentCanClimb = true,
-		Costs = {
-		}
-	})
-
-	local success, errorMessage = pcall(function()
-		path:ComputeAsync(NPC.PrimaryPart.Position, Target.PrimaryPart.Position)
-	end)
-
+function PathFind.PathFind(NPC, Target, v)
+	if not NPC then return end	if not NPC.PrimaryPart then return end if not Target then return end 	if not Target.PrimaryPart then return end
+	local path = game.PathfindingService:CreatePath({AgentRadius = 3,		AgentHeight = 6,		AgentCanJump = true,		AgentCanClimb = true,Costs = {}})
+	local success, errorMessage = pcall(function() 	path:ComputeAsync(NPC.PrimaryPart.Position, Target.PrimaryPart.Position) end)
 	local State = _G.NPCs[v]
 	if success and path.Status == Enum.PathStatus.Success then
 		local waypoints = path:GetWaypoints()
-		for i, v in waypoints do
-		--[[local Part = Instance.new("Part")
-			Part.Anchored = true
-			Part.CanCollide = false
-			Part.CanQuery = false
-			Part.CanTouch = false
-			Part.Position = v.Position
-			Part.Parent = game.Workspace
-			Part.Shape = Enum.PartType.Ball
-			Part.Transparency = 0.5
-			Part.Color = Color3.new(0.45098, 0, 1)
-			game:GetService("Debris"):AddItem(Part, 0.1)]]
-
-		end
 		if #waypoints >= 2 then
 			local movePosition
 			local separationForce = Seperation.getSeparationForce(NPC)
-
 			if not waypoints[3] then
 				movePosition = waypoints[2] and waypoints[2].Position or waypoints[1].Position
 			else
@@ -121,7 +80,6 @@ function PathFind.PathFind(NPC, Target, v, retryAttempts)
 				end
 				movePosition = waypoints[3].Position
 			end
-
 			movePosition = movePosition + separationForce
 			NPC.Humanoid:MoveTo(movePosition)
 			State.State = "Running"
@@ -133,17 +91,11 @@ function PathFind.PathFind(NPC, Target, v, retryAttempts)
 	end
 end
 function Nearest.NearestBlock(NPC)
-	local nearestBlock = nil
-	local shortestDistance = math.huge
-	local npc = NPC
-	local npcHRP = npc and npc:FindFirstChild("HumanoidRootPart")
-
+	local nearestBlock, shortestDistance, npcHRP = nil, math.huge, NPC and NPC:FindFirstChild("HumanoidRootPart")
 	if not npcHRP then return nil end
-
 	for _, Block in ipairs(game.Workspace.MAP.PathBlock:GetChildren()) do
 		local PrimaryPart = Block.PrimaryPart
 		local distance = (PrimaryPart.Position - npcHRP.Position).Magnitude
-
 		if distance < shortestDistance then
 			nearestBlock = Block
 			shortestDistance = distance
@@ -152,18 +104,13 @@ function Nearest.NearestBlock(NPC)
 	return nearestBlock
 end
 function Nearest.GetNearestPlayer(NPC, excludedPlayers)
-	local nearestCharacter = nil
-	local shortestDistance = math.huge
-	local npc = NPC
-	local npcHRP = npc and npc:FindFirstChild("HumanoidRootPart")
+	local shortestDistance, nearestCharacter, npcHRP = math.huge, nil,  NPC and NPC:FindFirstChild("HumanoidRootPart")
 	excludedPlayers = excludedPlayers or {}
 	if not npcHRP then return nil end
-
 	for _, player in ipairs(game.Players:GetPlayers()) do
 		if not excludedPlayers[player] and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
 			local charHRP = player.Character.HumanoidRootPart
 			local distance = (charHRP.Position - npcHRP.Position).Magnitude
-
 			if distance < shortestDistance then
 				nearestCharacter = player.Character
 				shortestDistance = distance
@@ -172,7 +119,6 @@ function Nearest.GetNearestPlayer(NPC, excludedPlayers)
 	end
 	return nearestCharacter
 end
-
 function Attack.Attack(NPC,target, i)
 	local  NPCData = _G.NPCs[i]
 	local NPC = NPCData.NPC
@@ -183,16 +129,7 @@ function Attack.Attack(NPC,target, i)
 	State.State = "Attacking"
 	AttackAnimation.KeyframeReached:Once(function(KeyFrame)
 		if KeyFrame == "Attack" then
-			local Hitbox = Instance.new("Part")
-			Hitbox.Parent = game.Workspace.MAP.Hitboxs
-			Hitbox.Anchored = true
-			Hitbox.CanCollide = false
-			Hitbox.CanQuery = false
-			Hitbox.CanTouch = false
-			Hitbox.Transparency = 0.5
-			Hitbox.Size = Vector3.new(4,5,4)
-			Hitbox.Color = Color3.new(1, 0, 0)
-			local NPCRoot = NPC.PrimaryPart or NPC:FindFirstChild("HumanoidRootPart")
+			local Hitbox, NPCRoot = Instance.new("Part"), NPC.PrimaryPart or NPC:FindFirstChild("HumanoidRootPart")		Hitbox.Parent = game.Workspace.MAP.Hitboxs		Hitbox.Anchored = true			Hitbox.CanCollide = false			Hitbox.CanQuery = false			Hitbox.CanTouch = false			Hitbox.Transparency = 0.5			Hitbox.Size = Vector3.new(4,5,4)			Hitbox.Color = Color3.new(1, 0, 0)
 			Hitbox.CFrame = NPCRoot.CFrame * CFrame.new(0, 0, -3)
 			local OverLapParams = OverlapParams.new()
 			OverLapParams.FilterType = Enum.RaycastFilterType.Include
@@ -200,7 +137,6 @@ function Attack.Attack(NPC,target, i)
 			local Humanoids = {}
 			if Hitbox then
 				local OverlappingParts = workspace:GetPartsInPart(Hitbox, OverLapParams)
-
 				for _, part in pairs(OverlappingParts) do
 					local Character = part.Parent
 					local Humanoid = Character and Character:FindFirstChild("Humanoid")
@@ -216,36 +152,28 @@ function Attack.Attack(NPC,target, i)
 				end
 			end
 			AttackAnimation.Ended:Wait()
-
 		end
 		State.State = "Idle"
 	end)
-
 end
-
 function Attack.DestroyBlock(NPC, target, i)
 	if not NPC or not target then return end
 	local Humanoid = NPC:FindFirstChild("Humanoid")
 	if not Humanoid then return end
-
 	task.spawn(function()
 		local State = _G.NPCs[i]
 		State.State = "Attacking" 
-
 		while target and target.Parent do
 			local AttackAnim : AnimationTrack = State.Animations.AttackAnimation
 			AttackAnim:Play()
 			AttackAnim.Ended:Wait()
-
 			if target and target.Parent then
 				local TargetHumanoid = target:FindFirstChild("Humanoid")
 				if not TargetHumanoid then break end
-
 				TargetHumanoid.Health -= 5
 				if target:FindFirstChild("Wood Break") then
 					target["Wood Break"]:Play()
 				end
-
 				if TargetHumanoid.Health <= 0 then
 					target:Destroy()
 					break 
@@ -254,21 +182,17 @@ function Attack.DestroyBlock(NPC, target, i)
 				break
 			end
 		end
-
 		State.State = "Idle"
 		NPC:SetAttribute("PathBlocked", nil)
 	end)
 end
-
 local function hasClearLineOfSight(npc, target)
 	local origin = npc.PrimaryPart.Position
 	local destination = target.PrimaryPart.Position
 	local direction = (destination - origin).unit * (destination - origin).magnitude
-
 	local rayParams = RaycastParams.new()
 	rayParams.FilterDescendantsInstances = {game.Workspace.Alive["NPC's"]} 
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
-
 	local result = workspace:Raycast(origin, direction, rayParams)
 	return result == nil or (result.Instance and result.Instance:IsDescendantOf(target))
 end
@@ -276,43 +200,21 @@ end
 local function isInFieldOfView(npc, target, fovAngle)
 	local npcPosition = npc.PrimaryPart.Position
 	local targetPosition = target.PrimaryPart.Position
-
 	local directionToTarget = (targetPosition - npcPosition).unit
 	local npcLookDirection = npc.PrimaryPart.CFrame.LookVector
-
 	local dotProduct = npcLookDirection:Dot(directionToTarget)
 	local angle = math.deg(math.acos(dotProduct))
-
 	return angle <= fovAngle / 2
 end
-
 function NPCSight.CheckSight(npc, target, fovAngle)
-	if not npc or not target or not npc.PrimaryPart or not target.PrimaryPart then
-		return false 
-	end
-
+	if not npc or not target or not npc.PrimaryPart or not target.PrimaryPart then		return false 	end
 	local player = game.Players:GetPlayerFromCharacter(target)
-	if not player then
-		return false 
-	end
-
-	if not isInFieldOfView(npc, target, fovAngle) then
-		return false 
-	end
-
-	if not hasClearLineOfSight(npc, target) then
-		return false 
-	end
-
+	if not player then		return false 	end
+	if not isInFieldOfView(npc, target, fovAngle) then		return false 	end
+	if not hasClearLineOfSight(npc, target) then	return false end
 	return true 
 end
-
-
 NPCS.__index = NPCS
-
-
-
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local PathfindingService = game:GetService("PathfindingService")
@@ -323,52 +225,27 @@ local function SetCollisionGroup(model)
 		end
 	end
 end
-
 function NPCS.AddNewNPC(Data)
 	local self = setmetatable({}, NPCS)
-	local NPC = script.Zombie:Clone()
-	NPC.Parent = game.Workspace.Alive["NPC's"]
+	local NPC = script.Zombie:Clone() NPC.Parent = game.Workspace.Alive["NPC's"]
+	local self,Aimator, AnimationsStorage  = setmetatable({}, NPCS),NPC.Humanoid.Animator, game.ServerStorage.Animations.Zombies.Slow
 	SetCollisionGroup(NPC)
 	local Aimator = NPC.Humanoid.Animator
 	local AnimationsStorage = game.ServerStorage.Animations.Zombies.Slow
-	local AnimationsTable = {
-		WalkAnimation = Aimator:LoadAnimation(AnimationsStorage.Walk), 
-		AttackAnimation = Aimator:LoadAnimation(AnimationsStorage.Attack),
-		ClimbingAnimation = Aimator:LoadAnimation(AnimationsStorage.Climb),
-		IdleAnimation = Aimator:LoadAnimation(AnimationsStorage.Idle)}
+	local AnimationsTable = {		WalkAnimation = Aimator:LoadAnimation(AnimationsStorage.Walk), 		AttackAnimation = Aimator:LoadAnimation(AnimationsStorage.Attack),		ClimbingAnimation = Aimator:LoadAnimation(AnimationsStorage.Climb),		IdleAnimation = Aimator:LoadAnimation(AnimationsStorage.Idle)}
 	local NPCTable = {NPC = NPC, Animations = AnimationsTable, Settings = {WalkSpeed = NPC.Humanoid.WalkSpeed}}
 	AnimationsTable.IdleAnimation:Play()
-
 	table.insert(_G.NPCs, NPCTable)
 	return self
 end
-
-
 function NPCS.New(Data)
-	local self = setmetatable({}, NPCS)
-	local Aimator = Data.NPC.Humanoid.Animator
-	local AnimationsStorage = game.ServerStorage.Animations.Zombies.Slow
-	local AnimationsTable = { 
-		WalkAnimation = Aimator:LoadAnimation(AnimationsStorage.Walk), 
-		AttackAnimation = Aimator:LoadAnimation(AnimationsStorage.Attack),
-		ClimbingAnimation = Aimator:LoadAnimation(AnimationsStorage.Climb),
-		IdleAnimation = Aimator:LoadAnimation(AnimationsStorage.Idle)}
+	local self,Aimator, AnimationsStorage  = setmetatable({}, NPCS), Data.NPC.Humanoid.Animator, game.ServerStorage.Animations.Zombies.Slow
+	local AnimationsTable = { 		WalkAnimation = Aimator:LoadAnimation(AnimationsStorage.Walk), 		AttackAnimation = Aimator:LoadAnimation(AnimationsStorage.Attack),		ClimbingAnimation = Aimator:LoadAnimation(AnimationsStorage.Climb),		IdleAnimation = Aimator:LoadAnimation(AnimationsStorage.Idle)}
 	local NPCTable = {NPC = Data.NPC, Animations = AnimationsTable, Settings = {WalkSpeed = Data.NPC.Humanoid.WalkSpeed}}
 	table.insert(_G.NPCs, NPCTable)
 	AnimationsTable.IdleAnimation:Play()
 	SetCollisionGroup(Data.NPC)
 	return self
-end
-local function visualizeRay(startPos, endPos)
-	local part = Instance.new("Part")
-	part.Size = Vector3.new(0.2, 0.2, (startPos - endPos).Magnitude) 
-	part.CFrame = CFrame.lookAt(startPos, endPos) * CFrame.new(0, 0, -part.Size.Z / 2)
-	part.Color = Color3.fromRGB(255, 0, 0) 
-	part.Material = Enum.Material.Neon
-	part.CanCollide = false
-	part.Anchored = true
-	part.Parent = workspace
-	game:GetService("Debris"):AddItem(part, 0.5)
 end
 task.spawn(function()
 	while task.wait() do
@@ -376,42 +253,23 @@ task.spawn(function()
 			task.spawn(function()
 				local NPC = v.NPC
 				if NPC:GetAttribute("Ragdoll") then
-					for i, v in v.Animations do
-						if v.IsPlaying then
-							v:Stop()
-						end
+					for _, anim in v.Animations do
+						if anim.IsPlaying then anim:Stop() end
 					end
 					return
 				end
-				local nearestCharacter = Nearest.GetNearestPlayer(NPC)
-				local nearestBlock = Nearest.NearestBlock(NPC)
-
-				if not NPC or not NPC.PrimaryPart or not nearestCharacter or not nearestCharacter.PrimaryPart then
-					return
-				end
-				if NPC:GetAttribute("PathBlocked") then
-					NPC.Humanoid.WalkSpeed = 0
-				end
-				local npcPos = NPC.PrimaryPart.Position
-				local charPos = nearestCharacter.PrimaryPart.Position
-				local distanceToCharacter = (charPos - npcPos).Magnitude
-
+				local nearestChar, nearestBlock = Nearest.GetNearestPlayer(NPC), Nearest.NearestBlock(NPC)
+				if not NPC or not NPC.PrimaryPart or not nearestChar or not nearestChar.PrimaryPart then return end
+				if NPC:GetAttribute("PathBlocked") then NPC.Humanoid.WalkSpeed = 0 else NPC.Humanoid.WalkSpeed = v.Settings.WalkSpeed  end
+				if v.State == "Attacking" then NPC.Humanoid.WalkSpeed = 0 end
+				local npcPos, charPos = NPC.PrimaryPart.Position, nearestChar.PrimaryPart.Position
+				local distToChar = (charPos - npcPos).Magnitude
 				if nearestBlock then
 					local blockPos = nearestBlock.PrimaryPart.Position
 					if (blockPos - npcPos).Magnitude <= 25 then
 						if NPC:GetAttribute("PathBlocked") then return end
-						local npcPosition = NPC.PrimaryPart.Position + NPC.PrimaryPart.CFrame.LookVector * 1 
-						local direction = NPC.PrimaryPart.CFrame.LookVector * 1
-						local endPosition = npcPosition + direction
-
-						local raycastParams = RaycastParams.new()
-						raycastParams.FilterDescendantsInstances = {game.Workspace.Alive}
-						raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-						local rayResult = workspace:Raycast(npcPosition, direction, raycastParams)
-
-						visualizeRay(npcPosition, endPosition)
-
+						local startPos, dir = npcPos + NPC.PrimaryPart.CFrame.LookVector, NPC.PrimaryPart.CFrame.LookVector
+						local rayResult = workspace:Raycast(startPos, dir, RaycastParams.new { FilterDescendantsInstances = {game.Workspace.Alive}, FilterType = Enum.RaycastFilterType.Exclude })
 						if rayResult and rayResult.Instance and rayResult.Instance:IsDescendantOf(workspace.MAP.PathBlock) then
 							Attack.DestroyBlock(NPC, nearestBlock, i)
 							NPC:SetAttribute("PathBlocked", true)
@@ -422,22 +280,13 @@ task.spawn(function()
 						NPC:SetAttribute("PathBlocked", nil)
 					end
 				end
-
 				if not NPC:GetAttribute("PathBlocked") then
-					if not NPC:GetAttribute("Following") then
-						PathFind.PathFind(NPC, nearestCharacter, i)
-					end
-
-					if distanceToCharacter <= 10 then
-						if NPCSight.CheckSight(NPC, nearestCharacter, 120) then
+					if not NPC:GetAttribute("Following") then PathFind.PathFind(NPC, nearestChar, i) end
+					if distToChar <= 10 then
+						if NPCSight.CheckSight(NPC, nearestChar, 120) then
 							NPC:SetAttribute("Following", true)
-
-							local separationForce = Seperation.getSeparationForce(NPC)
-							if distanceToCharacter <= 3 then
-								Attack.Attack(NPC, nearestCharacter, i)
-							end
-
-							NPC.Humanoid:MoveTo(charPos + separationForce)
+							if distToChar <= 3 then Attack.Attack(NPC, nearestChar, i) end
+							NPC.Humanoid:MoveTo(charPos + Seperation.getSeparationForce(NPC))
 							v.State = "Running"
 						else
 							NPC:SetAttribute("Following", nil)
@@ -446,27 +295,17 @@ task.spawn(function()
 						NPC:SetAttribute("Following", nil)
 					end
 				end
-
-				local state = v.State
 				local walkAnim = v.Animations.WalkAnimation
-				if state ~= "Running" and walkAnim.IsPlaying then
+				if v.State ~= "Running" and walkAnim.IsPlaying then
 					walkAnim:Stop()
-					if state == "Idle" then
-						NPC.Humanoid.WalkSpeed = 0
-					end
-					if state == "Attacking" then
-						NPC.Humanoid.WalkSpeed = 0
-					end
-				elseif state == "Running"  then
-					if not walkAnim.IsPlaying then
+					if v.State == "Idle" or v.State == "Attacking" then NPC.Humanoid.WalkSpeed = 0 end
+				elseif v.State == "Running" and not walkAnim.IsPlaying then
 					walkAnim:Play()
-					end
-						NPC.Humanoid.WalkSpeed = v.Settings.WalkSpeed
+					NPC.Humanoid.WalkSpeed = v.Settings.WalkSpeed
 				end
 			end)
 		end
 	end
 end)
-
 
 return NPCS
