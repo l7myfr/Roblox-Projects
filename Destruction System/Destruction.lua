@@ -1,4 +1,5 @@
 -- PARENT EVERY SCRIPT AND FOOLDER TO ME!!!!!!
+
 local Destruction = {}
 local Settings = require(script.Settings)
 local Force = require(script.ApplyForce)
@@ -96,12 +97,6 @@ function Destruction:StartVoxelDestruction(Data)
 					PartsNew[Part] = nil
 					if Connection then
 						Connection:Disconnect()
-					end
-				end)
-				Part:GetPropertyChangedSignal("Anchored"):Connect(function()
-					if Part.Anchored == true then
-						Part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-						return
 					end
 				end)
 			end
