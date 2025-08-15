@@ -1,3 +1,4 @@
+-- PARENT EVERY SCRIPT AND FOOLDER TO ME!!!!!!
 local Destruction = {}
 local Settings = require(script.Settings)
 local Force = require(script.ApplyForce)
@@ -5,7 +6,7 @@ local Divison = require(script.SplitUp)
 local RS = game:GetService("RunService")
 local HitBoxModule = require(script.Hitbox)
 local FadeOutModule = require(script.Misc.FadeOut)
-local function PartsInBound(Part) -- gets every part in a bound
+local function PartsInBound(Part)
 
 	if not Part then warn("No Part") return end
 	local Parts = workspace:GetPartsInPart(Part, Settings.OverlapParams)
@@ -27,20 +28,25 @@ function Destruction:StartVoxelDestruction(Data)
 				part.CanTouch = false
 			end
 		end
+		local PartsNew = {}
 		for i = 1, #Parts do
 			if not Parts[i] then Parts[i] = nil continue end
 			if not Parts[i]:IsA("Part") then Parts[i] = nil  continue end
+			PartsNew[Parts[i]] = true
 			if  Parts[i].Shape ~= Enum.PartType.Block then Parts[i] = nil continue end
 			if Parts[i]:HasTag("RegenPart") then -- if the part has RegenPart tag then it will be removed from the table
 				Parts[i] = nil
+				PartsNew[Parts[i]] = nil
 				continue
 			end
 			if Parts[i]:IsDescendantOf(game.Workspace.Ignored.Map.Undestructable) then 
 				Parts[i] = nil
+				PartsNew[Parts[i]] = nil
 				continue
 			end
 			if Parts[i]:IsDescendantOf(game.Workspace.Ignored.Alive)  then 
 				Parts[i] = nil
+				PartsNew[Parts[i]] = nil
 				continue
 			end
 			local Split = Divison:DividePart(Parts[i], Data) -- Divides the part
@@ -53,6 +59,7 @@ function Destruction:StartVoxelDestruction(Data)
 					Part.Anchored = false
 				else
 					Part:Destroy()
+					PartsNew[Part] = nil
 				end
 
 				if Data.Player and Data.Player:IsA("Player") and SpawnVoxels == true and RS:IsServer() then -- if we provide the player value in data then it will set networkowner
@@ -70,6 +77,7 @@ function Destruction:StartVoxelDestruction(Data)
 				end
 				if SpawnVoxels == false then
 					Part:Destroy()
+					PartsNew[Part] = nil
 				end
 				local Connection
 				if  Data.ApplyForce == false or not Data.ApplyForce then
@@ -85,6 +93,7 @@ function Destruction:StartVoxelDestruction(Data)
 					end)
 				end
 				Part.Destroying:Connect(function()
+					PartsNew[Part] = nil
 					if Connection then
 						Connection:Disconnect()
 					end
