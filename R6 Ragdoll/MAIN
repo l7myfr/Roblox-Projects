@@ -1,0 +1,216 @@
+-- place me in serverscriptservice as a serverside script or somethging
+local RagdollService = {}
+RagdollService.__index = RagdollService
+local PhysicsService = game:GetService("PhysicsService")
+local offsets = {
+	Head = {
+		CFrame = {CFrame.new(0, 1, 0), CFrame.new(0, -0.5, 0)}
+	},
+	HumanoidRootPart = {
+		CFrame = {CFrame.new(0, 0, 0), CFrame.new(0, 0, 0)}
+	},
+	["Right Arm"] = {
+		CFrame = {CFrame.new(1.3, 0.75, 0), CFrame.new(-0.2, 0.75, 0)}
+	},
+	["Left Arm"] = {
+		CFrame = {CFrame.new(-1.3, 0.75, 0), CFrame.new(0.2, 0.75, 0)}
+	},
+	["Right Leg"] = {
+		CFrame = {CFrame.new(0.5, -1, 0), CFrame.new(0, 1, 0)}
+	},
+	["Left Leg"] = {
+		CFrame = {CFrame.new(-0.5, -1, 0), CFrame.new(0, 1, 0)}
+	}
+}
+function RagdollService.new(Char)
+	if not Char or not Char:IsA("Model") or not Char:FindFirstChildOfClass("Humanoid") then
+		return nil 
+	end
+	Char:SetAttribute("Ragdoll",  false)
+	local self = setmetatable({}, RagdollService)
+	self.Character = Char
+	self.Humanoid = Char:FindFirstChildOfClass("Humanoid")
+	self.RootPart = Char:FindFirstChild("HumanoidRootPart")
+	self.Torso = Char:FindFirstChild("Torso")
+	if not self.Character or not self.Humanoid or not self.RootPart then
+		return nil
+	end
+	self:SetupFolder()
+	self:HumanoidSetup()
+	self:BuildJoints()
+	self:BuildCollisionParts()
+	self:SetupListener()
+	self.Humanoid.Died:Connect(function()
+		self.Character:SetAttribute("Ragdoll", true)
+	end)
+	return self
+end
+function RagdollService:SetupFolder()
+	local Char = self.Character
+	if not Char:FindFirstChild("CollisionParts") then
+		local CollisionParts = Instance.new("Folder")
+		CollisionParts.Name = "CollisionParts"
+		CollisionParts.Parent = Char
+	end
+end
+function RagdollService:BuildJoints()
+	local Char = self.Character
+	local hrp = Char:FindFirstChild("HumanoidRootPart")
+	for _, v in pairs(Char:GetDescendants()) do
+
+		if not v:IsA("BasePart") or v:IsA("Accessory") or v.Name == "Handle" or v.Name == "Torso" or v.Name == "HumanoidRootPart" then continue end
+		if not offsets[v.Name] then continue end
+
+		local a0, a1 = Instance.new("Attachment"), Instance.new("Attachment")
+		a0.Name = "RAGDOLL_ATTACHMENT"
+		a0.Parent = v
+		a0.CFrame = offsets[v.Name].CFrame[2]
+
+		a1.Name = "RAGDOLL_ATTACHMENT"
+		a1.Parent = hrp
+		a1.CFrame = offsets[v.Name].CFrame[1]
+
+		local joint = Instance.new("BallSocketConstraint")
+		joint.Name = "RAGDOLL_CONSTRAINT"
+		joint.Parent = v
+		joint.Attachment0 = a0
+		joint.Attachment1 = a1
+
+		v.Massless = true
+	end
+end
+function RagdollService:HumanoidSetup()
+	local Hum : Humanoid= self.Humanoid
+	if not Hum then return end
+	Hum.RequiresNeck = false
+	Hum.BreakJointsOnDeath = false
+	Hum.UseJumpPower = true
+end
+function RagdollService:BuildCollisionParts()
+	local Char = self.Character
+	for _, v in pairs(Char:GetChildren()) do
+		if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then
+			local CollisionParts : Part = v:Clone()
+			CollisionParts.Name = "CollisionPart"
+			CollisionParts.Size = Vector3.new(0.9, 1.2, 0.9)
+			CollisionParts.Color = Color3.new(1, 0, 0)
+			CollisionParts.CollisionGroup = "Collisions"
+			CollisionParts.Parent = Char:WaitForChild("CollisionParts")
+			CollisionParts.Transparency = 1
+			CollisionParts.Anchored = false
+			CollisionParts.CanQuery = false
+			CollisionParts.CanTouch = false
+			CollisionParts.CanCollide = false
+			CollisionParts.Massless = true
+			CollisionParts:ClearAllChildren()
+			local CollisionPartsWeld = Instance.new("Weld")
+			CollisionPartsWeld.Parent = CollisionParts
+			CollisionPartsWeld.Part0 = v
+			CollisionPartsWeld.Part1 = CollisionParts
+		end
+	end
+end
+function RagdollService:SetupListener()
+	self.Character:GetAttributeChangedSignal("Ragdoll"):Connect(function()
+		local Att = self.Character:GetAttribute("Ragdoll")
+		if Att == true then
+			self:Ragdoll()
+		else
+			self:Unragdoll()
+		end
+	end)
+end
+local function EnableCollisionParts(Char, isEnabled)
+	local collisionParts = Char:FindFirstChild("CollisionParts")
+	if collisionParts then
+		for _, v in ipairs(collisionParts:GetChildren()) do
+			if v:IsA("BasePart") then
+				v.CanCollide = isEnabled
+			end
+		end
+
+	end
+end
+
+local function EnableMotor6(Char, isEnabled)
+	for _, v in ipairs(Char:GetDescendants()) do
+		if v:IsA("Motor6D") and v.Name ~= "RootJoint" and v.Name ~= "MainRightItem" and v.Name ~= "MainLeftItem" then
+			v.Enabled = isEnabled
+		end
+	end
+end
+
+local function EnablePlatformStand(Char, isEnabled)
+	local humanoid = Char:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.PlatformStand = isEnabled
+		humanoid.AutoRotate = not isEnabled
+	end
+end
+
+local function Massless(Char, isEnabled)
+	local torso = Char:FindFirstChild("Torso")
+	local rootPart = Char:FindFirstChild("HumanoidRootPart")
+	if torso then
+		torso.Massless = isEnabled
+	end
+	if rootPart then
+		rootPart.Massless = isEnabled
+	end
+end
+
+function RagdollService:ChangeState(isEnabled)
+	if not self.RootPart or not self.Humanoid then return end
+
+	local player = game.Players:GetPlayerFromCharacter(self.Character)
+	if player then
+		self.RootPart:SetNetworkOwner(player)
+	else
+		self.RootPart:SetNetworkOwner(nil)
+		if self.Humanoid:GetState() ~= Enum.HumanoidStateType.Dead then
+			self.Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, isEnabled)
+			self.Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		end
+	end
+end
+-- NOTE: DO NOT ENABLE MASSLESS. it for some reason makes the ragdoll choppy.. weird...
+function RagdollService:Ragdoll()
+	EnableCollisionParts(self.Character, true)
+	self:ChangeState(true)
+	EnablePlatformStand(self.Character, true)
+	EnableMotor6(self.Character, false)
+	--Massless(self.Character, true)
+	for _, track in self.Humanoid.Animator:GetPlayingAnimationTracks() do
+		track:Stop()
+	end
+	for _, track in self.Humanoid:GetPlayingAnimationTracks() do
+		track:Stop()
+	end
+end
+function RagdollService:Unragdoll()
+	EnableCollisionParts(self.Character, false)
+	self:ChangeState(false)
+	EnablePlatformStand(self.Character, false)
+	EnableMotor6(self.Character, true)
+
+	if self.RootPart then
+		local ray = RaycastParams.new()
+		ray.FilterDescendantsInstances = {self.Character}
+		ray.FilterType = Enum.RaycastFilterType.Exclude
+
+		local result = workspace:Raycast(self.RootPart.Position, Vector3.new(0, -5, 0), ray)
+		if result then
+			local safeHeight = result.Position.Y + 3 -- 3 studs above ground
+			self.RootPart.CFrame = CFrame.new(self.RootPart.Position.X, safeHeight, self.RootPart.Position.Z)
+		else
+			self.RootPart.CFrame = self.RootPart.CFrame + Vector3.new(0, 3, 0)
+		end
+	end
+end
+game.Players.PlayerAdded:Connect(function(PLR)
+	PLR.CharacterAdded:Connect(function(Char)
+		RagdollService.new(Char)
+
+end)
+end)
+return RagdollService
