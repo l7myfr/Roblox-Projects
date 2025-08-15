@@ -1,0 +1,102 @@
+
+local TweenService = game:GetService("TweenService")
+local ForceModule = {}
+
+local ATTACHMENT_NAME = "ForceAttachment"
+local function getForceAttachment(part: BasePart): Attachment
+	local forceAttachment = part:FindFirstChild(ATTACHMENT_NAME)
+	if forceAttachment and forceAttachment:IsA("Attachment") then
+		return forceAttachment
+	end
+
+	forceAttachment = Instance.new("Attachment")
+	forceAttachment.Name = ATTACHMENT_NAME
+	forceAttachment.Parent = part
+	return forceAttachment
+end
+
+function ForceModule:ClearForce(part: BasePart)
+	for _, child in ipairs(part:GetChildren()) do
+		if child:IsA("LinearVelocity") or child:IsA("VectorForce") or child:IsA("AlignPosition") then
+			child:Destroy()
+		elseif child.Name == ATTACHMENT_NAME and child:IsA("Attachment") then
+			child:Destroy()
+		end
+	end
+end
+
+function ForceModule:VaultForce(character: Model, startPosition: Vector3, peakPosition: Vector3, endPosition: Vector3, duration: number, vaultObject: BasePart)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+
+	if not humanoid or not rootPart then
+		return
+	end
+
+	self:ClearForce(rootPart)
+
+	character:SetAttribute("Vaulting", true)
+	if vaultObject then
+		vaultObject.CanCollide = false
+	end
+
+	local originalWalkSpeed = humanoid.WalkSpeed
+	humanoid.WalkSpeed = 0
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+
+	local peakTweenInfo = TweenInfo.new(duration * 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+	local peakTween = TweenService:Create(rootPart, peakTweenInfo, { CFrame = CFrame.new(peakPosition) })
+	peakTween:Play()
+
+	local secondHalfDuration = duration * 0.7
+	local slideVelocity = ((endPosition - peakPosition) / secondHalfDuration) * 0.8
+
+	local attachment = getForceAttachment(rootPart)
+	local linearVelocity = Instance.new("LinearVelocity")
+	linearVelocity.MaxForce = 50000 
+	linearVelocity.VectorVelocity = slideVelocity
+	linearVelocity.Attachment0 = attachment
+	linearVelocity.Parent = rootPart
+
+	task.delay(duration, function()
+		if not character or not character.Parent then return end
+
+		self:ClearForce(rootPart)
+
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+		humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+		humanoid.WalkSpeed = originalWalkSpeed
+
+		character:SetAttribute("Vaulting", false)
+
+		if vaultObject then
+			vaultObject.CanCollide = true
+		end
+	end)
+end
+
+
+function ForceModule:MovementForce(character: Model, force: Vector3, direction: Vector3, duration: number)
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return
+	end
+
+	local attachment = getForceAttachment(rootPart)
+	local linearVelocity = Instance.new("LinearVelocity")
+	linearVelocity.MaxForce = math.huge 
+	linearVelocity.VectorVelocity = direction
+	linearVelocity.Attachment0 = attachment
+	linearVelocity.Parent = rootPart
+
+	task.delay(duration, function()
+		if linearVelocity and linearVelocity.Parent then
+			linearVelocity:Destroy()
+		end
+	end)
+end
+
+return ForceModule
