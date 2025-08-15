@@ -1,0 +1,158 @@
+--// Services
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+--// Character and Components
+local character = script.Parent
+local humanoid = character:WaitForChild("Humanoid")
+local animator = humanoid:WaitForChild("Animator")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+--// Modules
+local forceModule = require(game.ReplicatedStorage:WaitForChild("ForceModule"))
+
+--// Animations
+local animationData = {
+	Vault = {
+		animator:LoadAnimation(game.ReplicatedStorage.Animations.Vaults.Vault1),
+		animator:LoadAnimation(game.ReplicatedStorage.Animations.Vaults.Vault2),
+		animator:LoadAnimation(game.ReplicatedStorage.Animations.Vaults.Vault3),
+		animator:LoadAnimation(game.ReplicatedStorage.Animations.Vaults.Vault4),
+	},
+	Roll = {
+		animator:LoadAnimation(game.ReplicatedStorage.Animations.Roll.Roll1),
+	},
+	Climb = {
+		animator:LoadAnimation(game.ReplicatedStorage.Animations.Climbs.Climb1),
+	}
+}
+
+--// Configuration
+local raycastParams = RaycastParams.new()
+raycastParams.FilterDescendantsInstances = {character, workspace.Ignored}
+raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local ROLL_THRESHOLD = 5
+local isWPressed = false
+local lastGroundPosition = nil
+
+--// Functions
+local function playRandomAnimation(animationType)
+	local animations = animationData[animationType]
+	if animations and #animations > 0 then
+		local randomIndex = math.random(1, #animations)
+		local animation = animations[randomIndex]
+		animation.Priority = Enum.AnimationPriority.Action
+		animation:Play(0.1)
+	end
+end
+
+local function createDebugPart(position, color, parent)
+	local part = Instance.new("Part")
+	part.Size = Vector3.new(1, 1, 1)
+	part.Position = position
+	part.Anchored = true
+	part.CanCollide = false
+	part.Transparency = 1
+	part.BrickColor = BrickColor.new(color)
+	part.Parent = parent
+	return part
+end
+
+local function performVault()
+	if not isWPressed or character:GetAttribute("Vaulting") then return end
+
+	local characterPosition = rootPart.Position
+	local forwardDirection = rootPart.CFrame.LookVector
+
+	local groundRaycast = workspace:Raycast(characterPosition, forwardDirection * 3.5, raycastParams)
+
+	if not groundRaycast then return end
+
+	local lowerRaycast = workspace:Raycast(characterPosition - Vector3.new(0, 2.5, 0), forwardDirection * 3.5, raycastParams)
+	local upwardRaycast = workspace:Raycast(groundRaycast.Position + Vector3.new(0, 2, 0), Vector3.new(0, 3, 0), raycastParams)
+	local hitObject = groundRaycast.Instance
+
+	local canVault = lowerRaycast and
+		not upwardRaycast and
+		(lowerRaycast.Distance - groundRaycast.Distance > -4) and
+		(hitObject.Position.Y - character.Torso.Position.Y <= 1)
+
+	if not canVault then return end
+
+	local humanoidState = humanoid:GetState()
+	forceModule:ClearForce(rootPart)
+
+	local hitObjectSize = hitObject.Size
+	local hitObjectTopY = hitObject.Position.Y + (hitObjectSize.Y / 2)
+
+	if humanoidState == Enum.HumanoidStateType.Freefall or humanoidState == Enum.HumanoidStateType.Jumping then
+		playRandomAnimation("Climb")
+
+		local peakPosition = Vector3.new(groundRaycast.Position.X, hitObjectTopY + 1, groundRaycast.Position.Z)
+		local endPosition = forwardDirection * 1 + Vector3.new(groundRaycast.Position.X, hitObjectTopY + 3, groundRaycast.Position.Z)
+
+		forceModule:VaultForce(character, characterPosition, peakPosition, endPosition, 0.2, hitObject)
+	else
+		playRandomAnimation("Vault")
+
+		local peakPosition = Vector3.new(groundRaycast.Position.X, hitObjectTopY + 3, groundRaycast.Position.Z)
+		local endPosition = forwardDirection * 5 + Vector3.new(groundRaycast.Position.X, hitObjectTopY + 3, groundRaycast.Position.Z)
+
+		forceModule:VaultForce(character, characterPosition, peakPosition, endPosition, 0.2, hitObject)
+	end
+end
+
+local function checkForRoll()
+	local currentPosition = rootPart.Position
+	local humanoidState = humanoid:GetState()
+
+	if humanoidState == Enum.HumanoidStateType.Freefall then
+		if lastGroundPosition then
+			local fallDistance = lastGroundPosition.Y - currentPosition.Y
+			if fallDistance >= ROLL_THRESHOLD then
+				humanoid:SetAttribute("FallDistance", fallDistance)
+			end
+		end
+	elseif humanoidState == Enum.HumanoidStateType.Landed then
+		local fallDistance = humanoid:GetAttribute("FallDistance")
+		if fallDistance and fallDistance >= ROLL_THRESHOLD then
+			playRandomAnimation("Roll")
+			character:SetAttribute("RunHold", true)
+
+			local rollVelocity = Instance.new("BodyVelocity")
+			rollVelocity.Velocity = rootPart.CFrame.LookVector * 50
+			rollVelocity.MaxForce = Vector3.new(4000, 0, 4000)
+			rollVelocity.Parent = rootPart
+
+			task.delay(0.5, function()
+				rollVelocity:Destroy()
+				character:SetAttribute("RunHold", false)
+			end)
+
+			humanoid:SetAttribute("FallDistance", nil)
+		end
+		lastGroundPosition = currentPosition
+	elseif humanoidState == Enum.HumanoidStateType.Seated then
+		lastGroundPosition = currentPosition
+	end
+end
+
+--// Event Connections
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.W then
+		isWPressed = true
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+	if input.KeyCode == Enum.KeyCode.W then
+		isWPressed = false
+	end
+end)
+
+RunService.Heartbeat:Connect(function()
+	performVault()
+	checkForRoll()
+end)
