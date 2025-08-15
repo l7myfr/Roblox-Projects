@@ -1,0 +1,131 @@
+--!strict
+-- made specifically for lemys destruction system
+------------------------------------------------------------------
+--[ START: Internal InstancePooler Class Definition ]--
+-- This class is defined and used only within this PoolManager script.
+------------------------------------------------------------------
+local InstancePooler = {}
+InstancePooler.__index = InstancePooler
+
+-- The "private" constructor for our internal pooler class.
+function InstancePooler.new(className: string, initialSize: number, defaultProperties: {[string]: any})
+	local self = setmetatable({}, InstancePooler)
+
+	self._pool = {}
+	self._inUse = {}
+	self._className = className
+
+	-- Internal function to create and configure a new instance
+	self._createFunction = function()
+		local newInstance = Instance.new(self._className)
+		for property, value in pairs(defaultProperties) do
+			newInstance[property] = value
+		end
+		return newInstance
+	end
+
+	-- Preload the pool with the initial set of objects
+	for i = 1, initialSize do
+		local instance = self._createFunction()
+		table.insert(self._pool, instance)
+	end
+
+	return self
+end
+
+-- Retrieves an instance from this specific pool.
+function InstancePooler:GetInstance()
+	local instance = table.remove(self._pool)
+	if not instance then
+		-- If the pool is empty, create a new one on the fly.
+		instance = self._createFunction()
+	end
+	self._inUse[instance] = true
+	return instance
+end
+
+-- Returns an instance to this specific pool.
+function InstancePooler:ReturnInstance(instance: Instance)
+	if self._inUse[instance] then
+		self._inUse[instance] = nil
+		-- Parent to nil to remove from the world and deactivate it.
+		if instance:IsA("BasePart") then
+			instance.Parent = nil
+		end
+		table.insert(self._pool, instance)
+	end
+end
+
+------------------------------------------------------------------
+--[ END: Internal InstancePooler Class Definition ]--
+------------------------------------------------------------------
+
+
+------------------------------------------------------------------
+--[ START: Main PoolManager Logic ]--
+-- This is the public interface that other scripts will use.
+------------------------------------------------------------------
+local _pools = {}
+local PoolManager = {}
+
+--[[**
+	Creates and registers a new pool for a specific class of Instance.
+	This should be called from a central setup script at the start of the game.
+
+	@param className The string name of the class to pool (e.g., "Part").
+	@param initialSize The number of instances to create upfront.
+	@param defaultProperties A dictionary of properties to apply to each new instance.
+**--]]
+function PoolManager.CreatePool(className: string, initialSize: number, defaultProperties: {[string]: any}?)
+	if _pools[className] then
+		warn("PoolManager: A pool for '" .. className .. "' already exists. Ignoring new creation request.")
+		return
+	end
+
+	print("PoolManager: Creating pool for class '" .. className .. "' with initial size " .. tostring(initialSize))
+	-- Use the internal InstancePooler class to create the new pool object.
+	local newPool = InstancePooler.new(className, initialSize, defaultProperties or {})
+	_pools[className] = newPool
+end
+
+--[[**
+	Retrieves an instance from its corresponding pool.
+
+	@param className The string name of the class you want to get (e.g., "Part").
+	@return An instance from the pool.
+**--]]
+function PoolManager.GetInstance(className: string)
+	local pool = _pools[className]
+	if not pool then
+		error("PoolManager: No pool registered for class: '" .. className .. "'. Make sure to call CreatePool first.", 2)
+		return nil
+	end
+
+	return pool:GetInstance()
+end
+
+--[[**
+	Returns an instance to its correct pool.
+
+	@param instance The instance to return.
+**--]]
+function PoolManager.ReturnInstance(instance: Instance)
+	if not instance then return end
+
+	local className = instance.ClassName
+	local pool = _pools[className]
+
+	if pool then
+		pool:ReturnInstance(instance)
+	else
+		-- If this object belongs to no registered pool, destroy it to prevent memory leaks.
+		warn("PoolManager: Received an instance of class '" .. className .. "' which has no corresponding pool. Destroying it.")
+		instance:Destroy()
+	end
+end
+
+------------------------------------------------------------------
+--[ END: Main PoolManager Logic ]--
+------------------------------------------------------------------
+
+return PoolManager
