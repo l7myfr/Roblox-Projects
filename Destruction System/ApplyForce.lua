@@ -1,74 +1,53 @@
+
 local module = {}
-local Settings = require(script.Parent.Settings)
+
+--// Services & Modules
 local RS = game:GetService("RunService")
+local Settings = require(script.Parent.Settings)
 
--- Figures out the direction to apply force
-local function CalculateDirection(Data)
-	if not Data.DirectionPart then return end
-	return Data.DirectionPart.CFrame.LookVector
-end
-local function ApplyForce(oppositeDirection, partToApplyForceTo, Force)
+--// Constants
+local ZERO_VECTOR3 = Vector3.new(0, 0, 0)
 
-	if oppositeDirection and partToApplyForceTo and partToApplyForceTo.Anchored == false then
-		partToApplyForceTo.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-		partToApplyForceTo.AssemblyLinearVelocity += oppositeDirection * Force 
-		if Settings.AnchorThePart then
-			local Connection
-			Connection = RS.Heartbeat:Connect(function()
-				if partToApplyForceTo.AssemblyLinearVelocity == Vector3.new(0, 0, 0) then
-					partToApplyForceTo.Anchored = true
-					partToApplyForceTo.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-					Connection:Disconnect()
-				end
-				if partToApplyForceTo.Anchored == true then
-					partToApplyForceTo.Anchored = true
-					partToApplyForceTo.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-					Connection:Disconnect()
-				end
-			end)
-			partToApplyForceTo.Destroying:Connect(function()
-				if Connection then
-					Connection:Disconnect()
-				end
-			end)
+--// Connects to Heartbeat to anchor a part once it stops moving.
+local function anchorOnStop(part)
+	local connection
+	connection = RS.Heartbeat:Connect(function()
+		if not part.Parent or part.Anchored or part.AssemblyLinearVelocity == ZERO_VECTOR3 then
+			if part and part.Parent then
+				part.Anchored = true
+				part.AssemblyLinearVelocity = ZERO_VECTOR3
+			end
+			connection:Disconnect()
 		end
-	end
-end
-local function AddVelocity(Data, partToApplyForceTo: Part)
-	local Force = Data.Force or Settings.Force
-	local oppositeDirection = CalculateDirection(Data)
-
-	if Data.DirectionPart  and partToApplyForceTo then
-		local partPosition = Data.DirectionPart.Position
-		partPosition = Vector3.new(partPosition.X, partPosition.Y - 2.5 , partPosition.Z)
-		--[[local Part = Instance.new("Part")
-		Part.Parent = workspace.Ignored
-		Part.Anchored = true
-		Part.CanCollide = false
-		Part.Transparency = 0.5
-		Part.Color = Color3.new(1, 0, 0)
-		Part.Size = Vector3.one
-		Part.Position = partPosition]]
-		local partToApplyForceToPosition = partToApplyForceTo.Position
-		local UnanchorIfBelow = Data.UnanchorIfBelow
-		if partToApplyForceToPosition.Y > partPosition.Y and UnanchorIfBelow == false then
-			ApplyForce(oppositeDirection, partToApplyForceTo, Force)
-		elseif UnanchorIfBelow ==  true then
-			ApplyForce(oppositeDirection, partToApplyForceTo, Force)
-		elseif not UnanchorIfBelow then
-			ApplyForce(oppositeDirection, partToApplyForceTo, Force)
-		end
-		if partToApplyForceToPosition.Y < partPosition.Y and UnanchorIfBelow == false then
-			partToApplyForceTo.Anchored = true
-		end
-	end
+	end)
+	part.Destroying:Connect(function() connection:Disconnect() end)
 end
 
-
-
-
+--// Main function to apply directional force to a part.
 function module:ApplyForce(Data, partToApplyForceTo)
-	AddVelocity(Data, partToApplyForceTo)
+	if not Data or not partToApplyForceTo or not partToApplyForceTo.Parent or not Data.DirectionPart then
+		return
+	end
+
+	local yThreshold = Data.DirectionPart.Position.Y - 2.5
+
+	if not Data.UnanchorIfBelow and partToApplyForceTo.Position.Y <= yThreshold then
+		partToApplyForceTo.Anchored = true
+		return
+	end
+
+	if partToApplyForceTo.Anchored then
+		partToApplyForceTo.Anchored = false
+	end
+
+	local force = Data.Force or Settings.Force
+	local direction = Data.DirectionPart.CFrame.LookVector
+
+	partToApplyForceTo.AssemblyLinearVelocity += direction * force
+
+	if Settings.AnchorThePart then
+		anchorOnStop(partToApplyForceTo)
+	end
 end
 
 return module
