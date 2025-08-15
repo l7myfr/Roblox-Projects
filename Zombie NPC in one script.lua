@@ -1,1 +1,0 @@
-go to zombie npc file. this is deleted
